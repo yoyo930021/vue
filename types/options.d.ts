@@ -7,50 +7,46 @@ type Constructor = {
 
 // we don't support infer props in async component
 // N.B. ComponentOptions<V> is contravariant, the default generic should be bottom type
-export type Component<Data=DefaultData<never>, Methods=DefaultMethods<never>, Computed=DefaultComputed, Props=DefaultProps> =
+export type Component<Data=DefaultData<never>, Methods=DefaultMethods<never>, ComputedDef=DefaultComputedDef, Props=DefaultProps> =
   | typeof Vue
   | FunctionalComponentOptions<Props>
-  | ComponentOptions<never, Data, Methods, Computed, Props>
+  | ComponentOptions<never, Data, Methods, ComputedDef, Props>
 
 interface EsModuleComponent {
   default: Component
 }
 
-export type AsyncComponent<Data=DefaultData<never>, Methods=DefaultMethods<never>, Computed=DefaultComputed, Props=DefaultProps>
-  = AsyncComponentPromise<Data, Methods, Computed, Props>
-  | AsyncComponentFactory<Data, Methods, Computed, Props>
+export type AsyncComponent<Data=DefaultData<never>, Methods=DefaultMethods<never>, ComputedDef=DefaultComputedDef, Props=DefaultProps>
+  = AsyncComponentPromise<Data, Methods, ComputedDef, Props>
+  | AsyncComponentFactory<Data, Methods, ComputedDef, Props>
 
-export type AsyncComponentPromise<Data=DefaultData<never>, Methods=DefaultMethods<never>, Computed=DefaultComputed, Props=DefaultProps> = (
-  resolve: (component: Component<Data, Methods, Computed, Props>) => void,
+export type AsyncComponentPromise<Data=DefaultData<never>, Methods=DefaultMethods<never>, ComputedDef=DefaultComputedDef, Props=DefaultProps> = (
+  resolve: (component: Component<Data, Methods, ComputedDef, Props>) => void,
   reject: (reason?: any) => void
 ) => Promise<Component | EsModuleComponent> | void;
 
-export type AsyncComponentFactory<Data=DefaultData<never>, Methods=DefaultMethods<never>, Computed=DefaultComputed, Props=DefaultProps> = () => {
-  component: AsyncComponentPromise<Data, Methods, Computed, Props>;
+export type AsyncComponentFactory<Data=DefaultData<never>, Methods=DefaultMethods<never>, ComputedDef=DefaultComputedDef, Props=DefaultProps> = () => {
+  component: AsyncComponentPromise<Data, Methods, ComputedDef, Props>;
   loading?: Component | EsModuleComponent;
   error?: Component | EsModuleComponent;
   delay?: number;
   timeout?: number;
 }
 
-/**
- * When the `Computed` type parameter on `ComponentOptions` is inferred,
- * it should have a property with the return type of every get-accessor.
- * Since there isn't a way to query for the return type of a function, we allow TypeScript
- * to infer from the shape of `Accessors<Computed>` and work backwards.
- */
-export type Accessors<T> = {
-  [K in keyof T]: (() => T[K]) | ComputedOptions<T[K]>
+type GetComputed<T> = {
+  [K in keyof T]: T[K] extends ComputedOptions<infer R>
+    ? R
+    : T[K] extends () => any ? ReturnType<T[K]> : never
 }
 
 type DataDef<Data, Props, V> = Data | ((this: Readonly<Props> & V) => Data)
 /**
  * This type should be used when an array of strings is used for a component's `props` value.
  */
-export type ThisTypedComponentOptionsWithArrayProps<V extends Vue, Data, Methods, Computed, PropNames extends string> =
+export type ThisTypedComponentOptionsWithArrayProps<V extends Vue, Data, Methods, ComputedDef, PropNames extends string> =
   object &
-  ComponentOptions<V, DataDef<Data, Record<PropNames, any>, V>, Methods, Computed, PropNames[], Record<PropNames, any>> &
-  ThisType<CombinedVueInstance<V, Data, Methods, Computed, Readonly<Record<PropNames, any>>>>;
+  ComponentOptions<V, DataDef<Data, Record<PropNames, any>, V>, Methods, ComputedDef, PropNames[], Record<PropNames, any>> &
+  ThisType<CombinedVueInstance<V, Data, Methods, GetComputed<ComputedDef>, Readonly<Record<PropNames, any>>>>;
 
 /**
  * This type should be used when an object mapped to `PropOptions` is used for a component's `props` value.
@@ -58,23 +54,23 @@ export type ThisTypedComponentOptionsWithArrayProps<V extends Vue, Data, Methods
 export type ThisTypedComponentOptionsWithRecordProps<V extends Vue, Data, Methods, Computed, Props> =
   object &
   ComponentOptions<V, DataDef<Data, Props, V>, Methods, Computed, RecordPropsDefinition<Props>, Props> &
-  ThisType<CombinedVueInstance<V, Data, Methods, Computed, Readonly<Props>>>;
+  ThisType<CombinedVueInstance<V, Data, Methods, GetComputed<Computed>, Readonly<Props>>>;
 
 type DefaultData<V> =  object | ((this: V) => object);
 type DefaultProps = Record<string, any>;
 type DefaultMethods<V> =  { [key: string]: (this: V, ...args: any[]) => any };
-type DefaultComputed = { [key: string]: any };
+type DefaultComputedDef = { [key: string]: () => any };
 export interface ComponentOptions<
   V extends Vue,
   Data=DefaultData<V>,
   Methods=DefaultMethods<V>,
-  Computed=DefaultComputed,
+  ComputedDef=DefaultComputedDef,
   PropsDef=PropsDefinition<DefaultProps>,
   Props=DefaultProps> {
   data?: Data;
   props?: PropsDef;
   propsData?: object;
-  computed?: Accessors<Computed>;
+  computed?: ComputedDef;
   methods?: Methods;
   watch?: Record<string, WatchOptionsWithHandler<any> | WatchHandler<any> | string>;
 
@@ -167,6 +163,10 @@ export interface ComputedOptions<T> {
   get?(): T;
   set?(value: T): void;
   cache?: boolean;
+}
+
+export type ComputedDefinition<T> = {
+  [K in keyof T]: (() => T[K]) | ComputedOptions<T[K]>
 }
 
 export type WatchHandler<T> = (val: T, oldVal: T) => void;
